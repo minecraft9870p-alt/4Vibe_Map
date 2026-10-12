@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="vi"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>4vibe – Bản đồ thật (MapLibre + OpenFreeMap)</title>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<style>
+html,body{height:100%;margin:0;font:14px/1.4 system-ui,"Segoe UI",Roboto,sans-serif;color:#202124}
+#map{position:absolute;inset:0}
+.card{position:absolute;background:#fffffff2;border-radius:14px;padding:8px 12px;box-shadow:0 2px 10px #0004;z-index:5}
+#top{top:10px;left:10px;width:min(420px,calc(100% - 80px));padding:4px 10px}
+#q{width:100%;border:0;background:none;font:inherit;font-size:15px;padding:8px 2px;outline:none}
+#hud{top:64px;left:10px;width:min(420px,calc(100% - 20px));box-sizing:border-box}
+.mut{color:#5f6368;font-size:12px}.chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+button{font:inherit;border:0;border-radius:999px;padding:7px 12px;background:#fff;box-shadow:0 1px 5px #0004;cursor:pointer}
+.chips button.v{color:#fff;opacity:.55}.chips button.v.on{opacity:1;outline:3px solid #202124}
+button.pri,#fg.on,#gp.on{background:#ff5678;color:#fff;font-weight:700}
+.pb{height:8px;background:#0002;border-radius:9px;overflow:hidden;margin-top:5px}.pb i{display:block;height:100%;width:0;background:linear-gradient(90deg,#54b280,#926cdc,#ff8430,#e8a828)}
+#bt{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;gap:8px;z-index:5}
+#gs{left:10px;bottom:34px;padding:4px 10px;font-size:12px}
+#toast{position:absolute;left:50%;bottom:70px;transform:translateX(-50%);background:#202124e6;color:#fff;border-radius:14px;padding:8px 14px;opacity:0;transition:opacity .3s;pointer-events:none;text-align:center;max-width:85%;z-index:9}
+</style></head><body>
+<div id="map"></div>
+<div id="top" class="card"><input id="q" list="wl" placeholder="Tìm phường/xã (168 đơn vị sau sáp nhập)…"><datalist id="wl"></datalist></div>
+<div id="bt"><button id="fg">⬡ Sương mù</button><button id="d3">3D</button><button id="gp">📍 GPS</button><button id="lc">◎ Vị trí</button></div>
+<div id="hud" class="card" hidden><b>Sương mù · mở khóa</b> <span class="mut">đã chạm <b id="t">0</b>/168 phường/xã · <b id="n">0</b> ô</span><div class="pb"><i id="pb"></i></div>
+<div class="chips" id="vb"></div><div class="chips"><button id="wk" class="pri">▶ Tự đi bộ</button><button id="pk">Xem trước bản đồ</button><button id="rs">Đặt lại</button></div></div>
+<div id="gs" class="card" hidden></div><div id="toast"></div>
+<script>
+const VN=['Chữa lành','Art','Sôi động','Ẩm thực góc ẩn'],VC=['#54b280','#926cdc','#ff8430','#e8a828'];
+const GN={H:'TP.HCM cũ',B:'Bình Dương cũ',V:'Bà Rịa – Vũng Tàu cũ'},TN={p:'Phường',x:'Xã',d:'Đặc khu'};
+const D=[
+["H","p","Sài Gòn 106.705 10.780;Tân Định 106.690 10.790;Bến Thành 106.697 10.771;Cầu Ông Lãnh 106.696 10.763;Bàn Cờ 106.683 10.771;Xuân Hòa 106.688 10.781;Nhiêu Lộc 106.683 10.790;Xóm Chiếu 106.711 10.755;Khánh Hội 106.703 10.757;Vĩnh Hội 106.697 10.751;Chợ Quán 106.680 10.754;An Đông 106.672 10.755;Chợ Lớn 106.660 10.752;Bình Tây 106.644 10.745;Bình Tiên 106.634 10.746;Bình Phú 106.628 10.737;Phú Lâm 106.628 10.752;Tân Thuận 106.727 10.752;Phú Thuận 106.737 10.731;Tân Mỹ 106.717 10.729;Tân Hưng 106.705 10.738;Chánh Hưng 106.667 10.738;Phú Định 106.653 10.728;Bình Đông 106.630 10.722;Diên Hồng 106.667 10.771;Vườn Lài 106.673 10.766;Hòa Hưng 106.669 10.781;Minh Phụng 106.642 10.760;Bình Thới 106.652 10.768;Hòa Bình 106.640 10.771;Phú Thọ 106.647 10.777;Đông Hưng Thuận 106.633 10.838;Trung Mỹ Tây 106.613 10.855;Tân Thới Hiệp 106.640 10.862;Thới An 106.656 10.868;An Phú Đông 106.700 10.865;An Lạc 106.620 10.745;Bình Tân 106.585 10.798;Tân Tạo 106.580 10.755;Bình Trị Đông 106.612 10.762;Bình Hưng Hòa 106.600 10.812;Gia Định 106.700 10.800;Bình Thạnh 106.712 10.810;Bình Lợi Trung 106.688 10.812;Thạnh Mỹ Tây 106.720 10.795;Bình Quới 106.724 10.822;Hạnh Thông 106.683 10.835;An Nhơn 106.678 10.852;Gò Vấp 106.668 10.840;An Hội Đông 106.655 10.858;Thông Tây Hội 106.660 10.828;An Hội Tây 106.645 10.845;Đức Nhuận 106.675 10.798;Cầu Kiệu 106.692 10.797;Phú Nhuận 106.680 10.806;Tân Sơn Hòa 106.660 10.797;Tân Sơn Nhất 106.668 10.815;Tân Hòa 106.648 10.800;Bảy Hiền 106.645 10.790;Tân Bình 106.640 10.807;Tân Sơn 106.656 10.818;Tây Thạnh 106.627 10.815;Tân Sơn Nhì 106.630 10.800;Phú Thọ Hòa 106.627 10.785;Tân Phú 106.618 10.795;Phú Thạnh 106.625 10.775;Hiệp Bình 106.715 10.848;Thủ Đức 106.760 10.850;Tam Bình 106.740 10.870;Linh Xuân 106.780 10.872;Tăng Nhơn Phú 106.800 10.845;Long Bình 106.835 10.865;Long Phước 106.855 10.805;Long Trường 106.820 10.805;Cát Lái 106.790 10.775;Bình Trưng 106.770 10.790;Phước Long 106.775 10.815;An Khánh 106.738 10.790"],
+["B","p","Đông Hòa 106.785 10.895;Dĩ An 106.770 10.905;Tân Đông Hiệp 106.790 10.925;An Phú 106.723 10.930;Bình Hòa 106.705 10.895;Lái Thiêu 106.700 10.915;Thuận An 106.685 10.935;Thuận Giao 106.710 10.950;Thủ Dầu Một 106.655 10.980;Phú Lợi 106.675 10.970;Chánh Hiệp 106.660 11.020;Bình Dương 106.670 11.060;Hòa Lợi 106.650 11.100;Phú An 106.640 11.065;Tây Nam 106.570 11.090;Long Nguyên 106.610 11.210;Bến Cát 106.610 11.150;Chánh Phú Hòa 106.570 11.130;Vĩnh Tân 106.765 11.030;Bình Cơ 106.790 11.110;Tân Uyên 106.815 11.060;Tân Hiệp 106.830 11.010;Tân Khánh 106.760 10.985;Thới Hòa 106.605 11.105"],
+["V","p","Vũng Tàu 107.073 10.350;Tam Thắng 107.110 10.375;Rạch Dừa 107.095 10.385;Phước Thắng 107.125 10.395;Long Hương 107.145 10.485;Bà Rịa 107.170 10.495;Tam Long 107.215 10.470;Tân Hải 107.085 10.560;Tân Phước 107.040 10.560;Phú Mỹ 107.065 10.585;Tân Thành 107.040 10.640"],
+["H","x","Vĩnh Lộc 106.568 10.780;Tân Vĩnh Lộc 106.540 10.775;Bình Lợi 106.505 10.765;Tân Nhựt 106.575 10.690;Bình Chánh 106.560 10.665;Hưng Long 106.605 10.640;Bình Hưng 106.655 10.680;Bình Khánh 106.800 10.620;An Thới Đông 106.790 10.560;Cần Giờ 106.955 10.435;Củ Chi 106.455 10.975;Tân An Hội 106.495 10.980;Thái Mỹ 106.395 10.980;An Nhơn Tây 106.420 11.060;Nhuận Đức 106.480 11.040;Phú Hòa Đông 106.540 11.020;Bình Mỹ 106.580 10.960;Đông Thạnh 106.612 10.895;Hóc Môn 106.585 10.885;Xuân Thới Sơn 106.545 10.860;Bà Điểm 106.600 10.842;Nhà Bè 106.740 10.690;Hiệp Phước 106.745 10.640;Thạnh An 106.995 10.395"],
+["B","x","Thường Tân 106.850 11.160;Bắc Tân Uyên 106.835 11.115;Phú Giáo 106.800 11.290;Phước Hòa 106.890 11.250;Phước Thành 106.770 11.330;An Long 106.700 11.280;Trừ Văn Thố 106.600 11.300;Bàu Bàng 106.640 11.270;Long Hòa 106.450 11.350;Thanh An 106.520 11.270;Dầu Tiếng 106.375 11.285;Minh Thạnh 106.420 11.390"],
+["V","x","Châu Pha 107.000 10.600;Long Hải 107.215 10.395;Long Điền 107.190 10.430;Phước Hải 107.250 10.400;Đất Đỏ 107.275 10.480;Nghĩa Thành 107.215 10.575;Ngãi Giao 107.170 10.640;Kim Long 107.150 10.680;Châu Đức 107.230 10.750;Bình Giã 107.265 10.650;Xuân Sơn 107.340 10.690;Hồ Tràm 107.405 10.480;Xuyên Mộc 107.470 10.555;Hòa Hội 107.510 10.610;Bàu Lâm 107.350 10.580;Bình Châu 107.540 10.530;Hòa Hiệp 107.470 10.500;Long Sơn 107.100 10.440"],
+["V","d","Côn Đảo 107.35 10.2"]];
+
+
+const $=id=>document.getElementById(id),S=1,SQ=Math.sqrt(3),DIRS=[[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]];
+const ll=(x,y)=>[106.35+x/109.4,11.42-y/110.57];
+const W=[];
+for(const [g,t,s] of D)for(const e of s.split(';')){const a=e.trim().split(' '),lat=+a.pop(),lon=+a.pop(),n=a.join(' '),far=n==='Côn Đảo';W.push({n,t,g,far,lon:far?106.61:lon,lat:far?8.69:lat,x:(lon-106.35)*109.4,y:(11.42-lat)*110.57,tot:0,vc:0});}
+W.forEach((a,i)=>{let m=1e9;W.forEach((b,j)=>{if(i!==j&&!b.far){const d=Math.hypot(a.x-b.x,a.y-b.y);if(d<m)m=d}});a.r=a.far?0:Math.min(14,Math.max(1.6,m*1.05));});
+const wn=(x,y)=>{let b=-1,bd=1e9;for(let i=0;i<W.length;i++){if(W[i].far)continue;const d=Math.hypot(W[i].x-x,W[i].y-y);if(d<bd){bd=d;b=i}}return[b,bd]};
+const H=[],HK={};
+for(let q=-5;q<=96;q++){const r0=Math.floor(-8/(S*SQ)-q/2),r1=Math.ceil(134/(S*SQ)-q/2);
+for(let r=r0;r<=r1;r++){const x=S*1.5*q,y=S*SQ*(r+q/2),[bi,bd]=wn(x,y);
+if(bd<=W[bi].r*1.05){const c=[];for(let i=0;i<6;i++){const a=i*Math.PI/3;c.push(ll(x+S*.97*Math.cos(a),y+S*.97*Math.sin(a)))}c.push(c[0]);
+const h={q,r,x,y,w:bi,v:0,c:0,f:0,p:[c]};HK[q+','+r]=h;H.push(h);W[bi].tot++}}}
+const nb=h=>DIRS.map(d=>HK[(h.q+d[0])+','+(h.r+d[1])]).filter(Boolean);
+function hexAt(x,y){const q=2/3*x/S,r=(-x/3+SQ/3*y)/S;let rq=Math.round(q),rr=Math.round(r),rs=Math.round(-q-r);
+const dq=Math.abs(rq-q),dr=Math.abs(rr-r),ds=Math.abs(rs+q+r);if(dq>dr&&dq>ds)rq=-rr-rs;else if(dr>ds)rr=-rq-rs;return HK[rq+','+rr]}
+const OX=(106.772-106.35)*109.4,OY=(11.42-10.851)*110.57,near=()=>H.reduce((a,h)=>Math.hypot(h.x-OX,h.y-OY)<Math.hypot(a.x-OX,a.y-OY)?h:a);
+let n=0,tc=0,vib=0,fogOn=false,peek=false,me=near(),tm=null;
+function unlock(h,c){if(h.v)return;h.v=1;h.c=c;n++;if(++W[h.w].vc===1)tc++}
+function seed(){unlock(me,0);nb(me).forEach(h=>{unlock(h,0);nb(h).forEach(g=>unlock(g,0))})}seed();
+const fc=()=>({type:'FeatureCollection',features:H.map(h=>({type:'Feature',properties:{v:h.v,c:h.c,f:h.f},geometry:{type:'Polygon',coordinates:h.p}}))});
+const op=()=>['case',['==',['get','v'],1],.18,peek?.25:.8];
+function ui(){$('n').textContent=n;$('t').textContent=tc;$('pb').style.width=tc/168*100+'%';for(const h of H)h.f=0;for(const h of H)if(h.v)nb(h).forEach(g=>{if(!g.v)g.f=1});const s=map.getSource('fog');if(s)s.setData(fc())}
+function toast(t){const e=$('toast');e.textContent=t;e.style.opacity=1;clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.opacity=0,2200)}
+let SC=[106.772,10.851],SZ=12.5;try{const s=JSON.parse(localStorage.getItem('4vibe_pos')||'null');if(s){SC=s;SZ=15}}catch(e){}
+const map=new maplibregl.Map({container:'map',style:'https://tiles.openfreemap.org/styles/liberty',center:SC,zoom:SZ,maxPitch:75});
+map.addControl(new maplibregl.NavigationControl({visualizePitch:true}),'bottom-right');
+map.addControl(new maplibregl.ScaleControl(),'bottom-left');
+map.on('error',e=>{if(!map.loaded())toast('Không tải được bản đồ nền. Kiểm tra mạng (unpkg.com, openfreemap.org)')});
+const mk=new maplibregl.Marker({color:'#ff5678'});
+map.on('load',()=>{const lay=map.getStyle().layers,fs=lay.find(l=>l.type==='symbol'),tf=lay.find(l=>l.type==='symbol'&&l.layout&&l.layout['text-font']);
+map.addSource('fog',{type:'geojson',data:fc()});
+map.addLayer({id:'fog',type:'fill',source:'fog',layout:{visibility:'none'},paint:{'fill-color':['case',['==',['get','v'],1],['match',['get','c'],0,'#54b280',1,'#926cdc',2,'#ff8430','#e8a828'],['==',['get','f'],1],'#b4bdf4','#8f9be6'],'fill-opacity':op(),'fill-outline-color':'#ffffff88'}},fs&&fs.id);
+map.addSource('wd',{type:'geojson',data:{type:'FeatureCollection',features:W.map(w=>({type:'Feature',properties:{n:w.n},geometry:{type:'Point',coordinates:[w.lon,w.lat]}}))}});
+map.addLayer({id:'wd',type:'symbol',source:'wd',minzoom:8.5,layout:{'text-field':['get','n'],'text-font':tf?tf.layout['text-font']:['Noto Sans Regular'],'text-size':['interpolate',['linear'],['zoom'],8,10,13,13],'text-letter-spacing':.05},paint:{'text-color':'#5b3fa0','text-halo-color':'#ffffffcc','text-halo-width':1.6,'text-opacity':['interpolate',['linear'],['zoom'],13,1,15,0]}});
+mk.setLngLat(ll(me.x,me.y));if(gw===null)mk.addTo(map);ui()});
+map.on('click',e=>{if(!fogOn)return;const h=hexAt((e.lngLat.lng-106.35)*109.4,(11.42-e.lngLat.lat)*110.57);if(!h)return;
+if(h.v)toast(W[h.w].n+': đã mở '+W[h.w].vc+'/'+W[h.w].tot+' ô');else if(nb(h).some(g=>g.v)){unlock(h,vib);ui()}else toast('Chưa tới nơi: hãy mở ô kề vùng đã khám phá')});
+$('fg').onclick=e=>{fogOn=!fogOn;e.target.classList.toggle('on',fogOn);$('hud').hidden=!fogOn;map.setLayoutProperty('fog','visibility',fogOn?'visible':'none');if(fogOn){map.flyTo({center:ll(me.x,me.y),zoom:13.5});toast('Bật sương mù: chạm ô kề vùng đã mở')}};
+$('d3').onclick=()=>{const p=map.getPitch()>5?0:62;map.easeTo({pitch:p,zoom:p?Math.max(map.getZoom(),16):map.getZoom(),duration:900})};
+$('lc').onclick=()=>{if(gpos&&gw!==null){gfollow=true;map.flyTo({center:gpos,zoom:Math.max(map.getZoom(),16)})}else map.flyTo({center:ll(me.x,me.y),zoom:15})};
+$('pk').onclick=e=>{peek=!peek;map.setPaintProperty('fog','fill-opacity',op());e.target.textContent=peek?'Phủ sương lại':'Xem trước bản đồ'};
+$('vb').innerHTML=VN.map((t,i)=>`<button class="v${i?'':' on'}" data-v="${i}" style="background:${VC[i]}">${t}</button>`).join('');
+$('vb').onclick=e=>{const v=e.target.dataset.v;if(v==null)return;vib=+v;[...$('vb').children].forEach((b,i)=>b.classList.toggle('on',i==vib))};
+function step(){const ns=nb(me),un=ns.filter(h=>!h.v);let nx;
+if(un.length&&Math.random()<.8)nx=un[Math.floor(Math.random()*un.length)];
+else{const seen=new Set([me]);let fr=[[me,null]],found=null;for(let d=0;d<25&&!found;d++){const nf=[];for(const [h,f] of fr){for(const q of nb(h)){if(seen.has(q))continue;seen.add(q);const ff=f||q;if(!q.v){found=ff;break}nf.push([q,ff])}if(found)break}fr=nf}
+nx=found||ns[Math.floor(Math.random()*ns.length)]}
+me=nx;unlock(me,vib);nb(me).forEach(h=>{if(Math.random()<.5)unlock(h,vib)});ui();mk.setLngLat(ll(me.x,me.y));map.easeTo({center:ll(me.x,me.y),duration:600,easing:t=>t})}
+$('wk').onclick=e=>{if(gw!==null){toast('Hãy tắt GPS để dùng chế độ tự đi bộ');return}if(tm){clearInterval(tm);tm=null;e.target.textContent='▶ Tự đi bộ'}else{tm=setInterval(step,700);e.target.textContent='⏸ Dừng'}};
+$('rs').onclick=()=>{for(const h of H)h.v=0;W.forEach(w=>w.vc=0);n=0;tc=0;me=near();seed();ui();mk.setLngLat(ll(me.x,me.y))};
+const lab=w=>TN[w.t]+' '+w.n;
+$('wl').innerHTML=W.map(w=>`<option value="${lab(w)}">`).join('');
+$('q').onchange=e=>{const v=e.target.value.trim().toLowerCase(),w=W.find(w=>lab(w).toLowerCase()===v||w.n.toLowerCase()===v);if(w){map.flyTo({center:[w.lon,w.lat],zoom:w.far?11:14});toast(lab(w)+' · '+GN[w.g])}else toast('Không tìm thấy phường/xã này')};
+
+/* ===== GPS thật: tự định vị ngay khi mở trang ===== */
+var gw=null,gpos=null,gm=null,gfirst=0,gfollow=true,gseed=0,lastAcc=null;
+const gel=document.createElement('div');gel.style.cssText='width:18px;height:18px;border-radius:50%;background:#1a73e8;border:3px solid #fff;box-shadow:0 0 0 2px #1a73e855,0 1px 6px #0006';
+const circ=(lo,la,r)=>{const c=[];for(let i=0;i<=48;i++){const a=i/48*2*Math.PI;c.push([lo+r*Math.cos(a)/109400,la+r*Math.sin(a)/110570])}return{type:'Feature',geometry:{type:'Polygon',coordinates:[c]}}};
+const accSet=f=>{const s=map.getSource('acc');if(s)s.setData({type:'FeatureCollection',features:f})};
+map.on('load',()=>{map.addSource('acc',{type:'geojson',data:{type:'FeatureCollection',features:[]}});map.addLayer({id:'acc',type:'fill',source:'acc',paint:{'fill-color':'#1a73e8','fill-opacity':.15}});if(lastAcc)accSet([lastAcc])});
+map.on('dragstart',()=>{gfollow=false});
+function onPos(p){const lo=p.coords.longitude,la=p.coords.latitude,ac=p.coords.accuracy;gpos=[lo,la];
+try{localStorage.setItem('4vibe_pos',JSON.stringify(gpos))}catch(e){}
+if(!gm)gm=new maplibregl.Marker({element:gel}).setLngLat(gpos).addTo(map);else gm.setLngLat(gpos);
+lastAcc=circ(lo,la,ac);accSet([lastAcc]);$('gs').hidden=false;
+if(!gfirst){gfirst=1;map.jumpTo({center:gpos,zoom:Math.max(map.getZoom(),15.5)});toast('Đã định vị vị trí hiện tại của bạn')}else if(gfollow)map.easeTo({center:gpos,duration:500});
+if(ac>500){$('gs').textContent='GPS yếu (±'+Math.round(ac)+' m), chưa mở khóa ô nào';return}
+const h=hexAt((lo-106.35)*109.4,(11.42-la)*110.57);
+if(!h){$('gs').textContent='GPS ±'+Math.round(ac)+' m · bạn đang ngoài vùng demo (168 phường/xã TPHCM sau sáp nhập)';return}
+const b=n;
+if(!gseed){gseed=1;for(const x of H)x.v=0;W.forEach(w=>w.vc=0);n=0;tc=0;me=h;seed()}else{me=h;unlock(h,vib);nb(h).forEach(g=>unlock(g,vib))}
+ui();$('gs').textContent='GPS ±'+Math.round(ac)+' m · '+TN[W[h.w].t]+' '+W[h.w].n+(n>b&&gseed?' · +'+(n-b)+' ô':'')}
+function startGPS(){if(gw!==null)return;
+if(!navigator.geolocation){toast('Trình duyệt không hỗ trợ GPS');return}
+if(!window.isSecureContext&&location.protocol!=='file:'){toast('GPS cần mở trang bằng https hoặc localhost');return}
+if(tm){clearInterval(tm);tm=null;$('wk').textContent='▶ Tự đi bộ'}
+mk.remove();gfirst=0;gfollow=true;$('gp').classList.add('on');
+gw=navigator.geolocation.watchPosition(onPos,err=>{toast(['','Bạn đã từ chối quyền vị trí. Hãy cho phép lại trong cài đặt trình duyệt rồi tải lại trang.','Không xác định được vị trí. Kiểm tra dịch vụ định vị trên máy.','Hết thời gian chờ tín hiệu GPS.'][err.code]||'Lỗi GPS');if(err.code===1)stopGPS()},{enableHighAccuracy:true,maximumAge:2000,timeout:20000})}
+function stopGPS(){if(gw!==null)navigator.geolocation.clearWatch(gw);gw=null;$('gp').classList.remove('on');$('gs').hidden=true;if(gm){gm.remove();gm=null}accSet([]);mk.setLngLat(ll(me.x,me.y)).addTo(map)}
+$('gp').onclick=()=>{gw!==null?stopGPS():startGPS()};
+startGPS();
+</script></body></html>
